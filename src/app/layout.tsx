@@ -40,7 +40,10 @@ export default function RootLayout({
             y=e.createElement(n);y.async=!0;y.src='https://cdn.pendo.io/agent/static/'+apiKey+'/pendo.js';
             z=e.getElementsByTagName(n)[0];z.parentNode.insertBefore(y,z);})(window,document,'script','pendo');
           })('cc47d62f-c957-4437-9b47-dd58efeea94b');
-          pendo.initialize({ visitor: { id: '' } });
+          // Assign a persistent anonymous visitor ID — Fork has no login,
+          // so we generate a UUID on first visit and reuse it via localStorage.
+          var _fvid=(function(){try{var k='_fork_vid',id=localStorage.getItem(k);if(!id){id=crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem(k,id);}return id;}catch(e){return '';}})();
+          pendo.initialize({ visitor: { id: _fvid } });
         `}} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link

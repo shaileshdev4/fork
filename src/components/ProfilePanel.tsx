@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { LifeProfile } from "@/lib/profile";
+import { track } from "@/lib/analytics";
 import { essentialsMonthly } from "@/lib/profile";
 import type { LaneTheme } from "@/lib/scenario";
 import { getCountry, currencyForCountry } from "@/lib/countries";
@@ -36,6 +37,20 @@ export default function ProfilePanel({
   const [open, setOpen] = useState(false);
   const set = (patch: Partial<LifeProfile>) =>
     onChange({ ...profile, ...patch });
+
+  // Debounce profile_customized so it fires once per slider interaction, not per tick.
+  const trackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trackCustomize = (field: string, value: number) => {
+    if (trackTimer.current) clearTimeout(trackTimer.current);
+    trackTimer.current = setTimeout(() => {
+      track("profile_customized", {
+        field,
+        value,
+        city: profile.city,
+        currency: profile.currency,
+      });
+    }, 800);
+  };
   const country = getCountry(profile.country);
   const tax = country.compute(profile.salary, profile.region);
   const essentials = essentialsMonthly(profile);
@@ -113,7 +128,7 @@ export default function ProfilePanel({
         max={bounds.salary.max}
         step={bounds.salary.step}
         accent={theme.accent}
-        onChange={(v) => set({ salary: v })}
+        onChange={(v) => { set({ salary: v }); trackCustomize("salary", v); }}
       />
 
       {/* Live tax readout */}
@@ -135,7 +150,7 @@ export default function ProfilePanel({
         max={bounds.rent.max}
         step={bounds.rent.step}
         accent={theme.accent}
-        onChange={(v) => set({ rentMonthly: v, rentSource: "user" })}
+        onChange={(v) => { set({ rentMonthly: v, rentSource: "user" }); trackCustomize("rent", v); }}
         source={provenanceLabel(profile.rentSource)}
       />
 
@@ -147,7 +162,7 @@ export default function ProfilePanel({
         max={100}
         step={5}
         accent={theme.accent}
-        onChange={(v) => set({ savingsRate: v / 100 })}
+        onChange={(v) => { set({ savingsRate: v / 100 }); trackCustomize("savingsRate", v); }}
       />
 
       {/* Expandable detail: per-category monthly costs */}
@@ -171,7 +186,7 @@ export default function ProfilePanel({
             max={bounds.groceries.max}
             step={bounds.groceries.step}
             accent={theme.accent}
-            onChange={(v) => set({ groceriesMonthly: v, costSource: "user" })}
+            onChange={(v) => { set({ groceriesMonthly: v, costSource: "user" }); trackCustomize("groceries", v); }}
           />
           <SliderRow
             label="Transport"
@@ -181,7 +196,7 @@ export default function ProfilePanel({
             max={bounds.transport.max}
             step={bounds.transport.step}
             accent={theme.accent}
-            onChange={(v) => set({ transportMonthly: v, costSource: "user" })}
+            onChange={(v) => { set({ transportMonthly: v, costSource: "user" }); trackCustomize("transport", v); }}
           />
           <SliderRow
             label="Utilities"
@@ -191,7 +206,7 @@ export default function ProfilePanel({
             max={bounds.utilities.max}
             step={bounds.utilities.step}
             accent={theme.accent}
-            onChange={(v) => set({ utilitiesMonthly: v, costSource: "user" })}
+            onChange={(v) => { set({ utilitiesMonthly: v, costSource: "user" }); trackCustomize("utilities", v); }}
           />
           <SliderRow
             label="Everything else"
@@ -201,7 +216,7 @@ export default function ProfilePanel({
             max={bounds.other.max}
             step={bounds.other.step}
             accent={theme.accent}
-            onChange={(v) => set({ otherMonthly: v, costSource: "user" })}
+            onChange={(v) => { set({ otherMonthly: v, costSource: "user" }); trackCustomize("other", v); }}
           />
         </div>
       )}
@@ -226,6 +241,12 @@ function CitySelect({
       value={profile.city}
       onChange={(e) => {
         const o = CITY_OPTIONS.find((x) => x.city === e.target.value)!;
+        track("city_changed", {
+          fromCity: profile.city,
+          toCity: o.city,
+          fromCountry: profile.country,
+          toCountry: o.country,
+        });
         onPick(o.city, o.region, o.country);
       }}
       className="mt-1 w-full bg-paper border border-line rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-ink"
