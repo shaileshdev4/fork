@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { groqChat, parseJsonFromLLM } from "@/lib/groq";
+import { normalizePerturbation } from "@/lib/stress";
 
 /**
  * POST /api/whatif { text: "what if I lose my job in year 2" }
@@ -45,9 +46,11 @@ Return ONLY JSON, one of these shapes:
 
   try {
     const out = await groqChat(prompt, 150);
-    if (!out) return NextResponse.json(fallback(text));
-    return NextResponse.json(parseJsonFromLLM(out));
+    const raw = out ? parseJsonFromLLM(out) : fallback(text);
+    const normalized = normalizePerturbation(raw) ?? normalizePerturbation(fallback(text));
+    return NextResponse.json(normalized ?? { kind: "none" });
   } catch {
-    return NextResponse.json(fallback(text));
+    const normalized = normalizePerturbation(fallback(text));
+    return NextResponse.json(normalized ?? { kind: "none" });
   }
 }
