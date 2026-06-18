@@ -32,6 +32,8 @@ import TrustPanel from "@/components/TrustPanel";
 import StressBar from "@/components/StressBar";
 import StressHitBanner from "@/components/StressHitBanner";
 import ShareCard from "@/components/ShareCard";
+import MonthLedgerPanel from "@/components/MonthLedger";
+import StatementArchiveModal from "@/components/StatementArchiveModal";
 import { Logo } from "@/components/Logo";
 import type { Perturbation } from "@/lib/stress";
 import { normalizePerturbation, stressAtMonth } from "@/lib/stress";
@@ -70,6 +72,9 @@ export default function Home() {
   const [stress, setStress] = useState<Perturbation>({ kind: "none" });
   const [showCard, setShowCard] = useState(false);
   const [sound, setSound] = useState(false);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [ledgerLane, setLedgerLane] = useState<"A" | "B">("A");
+  const [showLedgerArchive, setShowLedgerArchive] = useState(false);
   const pendingText = useRef<string>("");
   const [resumable, setResumable] = useState<SavedRun | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -139,6 +144,38 @@ export default function Home() {
     () => synthesize(a, b, lifeAProbe, lifeBProbe, persona),
     [a, b, lifeAProbe, lifeBProbe, persona],
   );
+
+  const totalForks = useMemo(
+    () => deckFor(persona.stage).length * 2,
+    [persona.stage],
+  );
+  const answered =
+    Object.keys(choicesA).length + Object.keys(choicesB).length;
+  const cycleComplete = useMemo(
+    () =>
+      phase === "sim" &&
+      answered >= totalForks &&
+      lifeA.months.length >= horizon &&
+      lifeB.months.length >= horizon,
+    [
+      phase,
+      answered,
+      totalForks,
+      lifeA.months.length,
+      lifeB.months.length,
+      horizon,
+    ],
+  );
+
+  const openLedgerArchive = useCallback(() => {
+    setShowLedgerArchive(true);
+    track("life_ledger_opened", {
+      cityA: a.city,
+      cityB: b.city,
+      lifeStage: persona.stage,
+      fromMonth: month,
+    });
+  }, [a.city, b.city, persona.stage, month]);
 
   // Keep simStateRef current so the setInterval closure can read the latest values.
   useEffect(() => {
@@ -504,8 +541,6 @@ export default function Home() {
 
   const yearLabel = (month / 12).toFixed(month % 12 === 0 ? 0 : 1);
   const sameCurrency = a.currency === b.currency;
-  const totalForks = deckFor(persona.stage).length * 2;
-  const answered = Object.keys(choicesA).length + Object.keys(choicesB).length;
 
   const activeProfile = activeDecision?.lane === "A" ? a : b;
   const activeTheme = activeDecision?.lane === "A" ? THEME_A : THEME_B;
@@ -515,6 +550,16 @@ export default function Home() {
 
   const stressMonth = stressAtMonth(stress);
   const stressFlashNow = stateA?.stressHit || stateB?.stressHit;
+  const maxSimMonth = Math.min(
+    horizon,
+    lifeA.months.length,
+    lifeB.months.length,
+  );
+
+  const scrubToMonth = (m: number) => {
+    setPlaying(false);
+    setMonth(Math.max(1, Math.min(maxSimMonth, m)));
+  };
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-8 md:py-12">
@@ -684,9 +729,18 @@ export default function Home() {
             )}
           </button>
           <div className="flex-1">
-            <div className="relative h-2 rounded-full bg-ink/10 overflow-hidden">
+            <div className="relative h-2 rounded-full bg-ink/10 overflow-hidden group">
+              <input
+                type="range"
+                min={1}
+                max={maxSimMonth}
+                value={Math.min(month, maxSimMonth)}
+                onChange={(e) => scrubToMonth(Number(e.target.value))}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                aria-label={`Scrub timeline — month ${month} of ${maxSimMonth}`}
+              />
               <div
-                className="h-full rounded-full bg-ink transition-all"
+                className="h-full rounded-full bg-ink transition-all pointer-events-none"
                 style={{ width: `${(month / horizon) * 100}%` }}
               />
               {stressMonth && (
@@ -701,7 +755,15 @@ export default function Home() {
               )}
             </div>
             <div className="flex justify-between text-[11px] text-muted mt-1 tnum">
-              <span>Month {month}</span>
+              <span>
+                Month {month}
+                {!playing && (
+                  <span className="hidden sm:inline text-muted/70">
+                    {" "}
+                    · drag to inspect
+                  </span>
+                )}
+              </span>
               <span>
                 {answered}/{totalForks} choices · Year {yearLabel} of{" "}
                 {horizon / 12}
@@ -747,6 +809,19 @@ export default function Home() {
                 </span>
               )}
             </p>
+          ) : cycleComplete ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-1 w-full">
+              <p className="text-xs text-ink/80 flex-1">
+                Full timeline complete — audit every month, line by line.
+              </p>
+              <button
+                type="button"
+                onClick={openLedgerArchive}
+                className="text-xs shrink-0 rounded-full border border-ink px-3 py-1.5 text-ink hover:bg-ink hover:text-paper transition-colors"
+              >
+                Open life ledger
+              </button>
+            </div>
           ) : (
             <p className="text-xs text-muted px-1">
               {playing
@@ -757,6 +832,26 @@ export default function Home() {
             </p>
           )}
         </div>
+
+        <MonthLedgerPanel
+          open={ledgerOpen}
+          onToggle={() => setLedgerOpen((o) => !o)}
+          month={month}
+          lane={ledgerLane}
+          onLaneChange={setLedgerLane}
+          stateA={stateA}
+          stateB={stateB}
+          labelA={a.label}
+          labelB={b.label}
+          cityA={a.city}
+          cityB={b.city}
+          currencyA={a.currency}
+          currencyB={b.currency}
+          themeA={THEME_A}
+          themeB={THEME_B}
+          showBrowseAll={cycleComplete}
+          onBrowseAll={openLedgerArchive}
+        />
       </div>
 
       <StressBar
@@ -807,6 +902,15 @@ export default function Home() {
         >
           {copied ? "Link copied" : "Copy link"}
         </button>
+        {cycleComplete && (
+          <button
+            type="button"
+            onClick={openLedgerArchive}
+            className="border border-line px-5 py-2.5 rounded-lg text-sm hover:border-ink"
+          >
+            Life ledger
+          </button>
+        )}
         <span className="text-xs text-muted">
           A simulator, not financial advice.
         </span>
@@ -832,6 +936,27 @@ export default function Home() {
           themeB={THEME_B}
           narration={narration}
           onClose={() => setShowCard(false)}
+        />
+      )}
+
+      {showLedgerArchive && (
+        <StatementArchiveModal
+          open={showLedgerArchive}
+          onClose={() => setShowLedgerArchive(false)}
+          initialMonth={month}
+          horizon={horizon}
+          lane={ledgerLane}
+          onLaneChange={setLedgerLane}
+          lifeA={lifeA}
+          lifeB={lifeB}
+          labelA={a.label}
+          labelB={b.label}
+          cityA={a.city}
+          cityB={b.city}
+          currencyA={a.currency}
+          currencyB={b.currency}
+          themeA={THEME_A}
+          themeB={THEME_B}
         />
       )}
 
