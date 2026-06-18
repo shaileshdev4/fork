@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { track } from "@/lib/analytics";
 import type { LifeProfile } from "@/lib/profile";
 import { formatSalaryShort } from "@/lib/profile";
 import { resolveCityMeta } from "@/lib/data/cityData";
@@ -76,6 +77,9 @@ export default function Home() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const preStress = useRef<StressSnapshot | null>(null);
   const lastStressHitMonth = useRef(0);
+  // Holds latest sim state for the setInterval closure (avoids stale captures).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const simStateRef = useRef<Record<string, any>>({});
 
   useEffect(() => {
     const r = decodeRun(window.location.search);
@@ -83,6 +87,7 @@ export default function Home() {
       setA(r.a);
       setB(r.b);
       setPhase("sim");
+      track("shared_run_loaded", { cityA: r.a.city, cityB: r.b.city });
       return;
     }
     const saved = loadRun();
@@ -91,6 +96,11 @@ export default function Home() {
 
   const resume = useCallback(() => {
     if (!resumable) return;
+    track("session_resumed", {
+      cityA: resumable.a.city,
+      cityB: resumable.b.city,
+      savedMinsAgo: Math.round((Date.now() - resumable.savedAt) / 60000),
+    });
     setA(resumable.a);
     setB(resumable.b);
     setPersona(resumable.persona);
@@ -132,6 +142,11 @@ export default function Home() {
     [a, b, lifeAProbe, lifeBProbe, persona],
   );
 
+  // Keep simStateRef current so the setInterval closure can read the latest values.
+  useEffect(() => {
+    simStateRef.current = { a, b, lifeA, lifeB, synthesis, persona };
+  }, [a, b, lifeA, lifeB, synthesis, persona]);
+
   const stateA =
     lifeA.months[Math.min(month, lifeA.months.length) - 1] ?? lifeA.months[0];
   const stateB =
@@ -158,6 +173,16 @@ export default function Home() {
     (optionId: string) => {
       if (!activeDecision) return;
       const { lane, decisionId } = activeDecision;
+      const decision = deckFor(persona.stage).find((d) => d.id === decisionId);
+      track("life_decision_made", {
+        decisionId,
+        lane,
+        optionId,
+        chapter: decision?.chapter,
+        lifeStage: persona.stage,
+        cityA: a.city,
+        cityB: b.city,
+      });
       if (lane === "A") setChoicesA((c) => ({ ...c, [decisionId]: optionId }));
       else setChoicesB((c) => ({ ...c, [decisionId]: optionId }));
       if (sound) sfx.confirm();
@@ -177,6 +202,15 @@ export default function Home() {
       setMonth((m) => {
         if (m >= horizon) {
           setPlaying(false);
+          const s = simStateRef.current;
+          track("simulation_completed", {
+            cityA: s.a?.city,
+            cityB: s.b?.city,
+            lifeStage: s.persona?.stage,
+            finalBalanceA: s.lifeA?.finalBalance,
+            finalBalanceB: s.lifeB?.finalBalance,
+            recommendation: s.synthesis?.recommendation,
+          });
           return m;
         }
         if (sound) sfx.tick();
@@ -236,6 +270,14 @@ export default function Home() {
       );
       setA(pa);
       setB(pb);
+      track("decision_sentence_submitted", {
+        cityA: p.optionA.city,
+        cityB: p.optionB.city,
+        salaryA: p.optionA.salary,
+        salaryB: p.optionB.salary,
+        inputLength: text.length,
+        aiParsed: res.ok,
+      });
       setPhase("persona");
       trackPendo("onboarding_parsed", {
         city_a: pa.city,
@@ -296,7 +338,15 @@ export default function Home() {
           }),
         });
         const d = await res.json();
-        if (d.text) setNarration(d.text);
+        if (d.text) {
+          setNarration(d.text);
+          track("ai_narration_generated", {
+            cityA: a.label,
+            cityB: b.label,
+            topValue: persona.values[0],
+            recommendation: synthesis.recommendation,
+          });
+        }
       } catch {}
     }, 600);
     return () => clearTimeout(id);
@@ -449,10 +499,15 @@ export default function Home() {
     const url = `${window.location.origin}${window.location.pathname}?${qs}`;
     window.history.replaceState(null, "", `?${qs}`);
     navigator.clipboard?.writeText(url);
+    track("share_link_copied", {
+      cityA: a.city,
+      cityB: b.city,
+      recommendation: synthesis.recommendation,
+    });
     setCopied(true);
     trackPendo("share_link_copied", { city_a: a.city, city_b: b.city });
     setTimeout(() => setCopied(false), 1800);
-  }, [a, b, horizon]);
+  }, [a, b, horizon, synthesis.recommendation]);
 
   if (phase === "onboarding")
     return (
@@ -462,6 +517,7 @@ export default function Home() {
         resumable={resumable}
         onResume={resume}
         onDismissResume={() => {
+          track("session_dismissed", {});
           clearRun();
           setResumable(null);
         }}
@@ -611,10 +667,20 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              if (month >= horizon) {
-                setMonth(1);
-              }
-              setPlaying((p) => !p);
+              const atEnd = month >= horizon;
+              if (atEnd) setMonth(1);
+              setPlaying((p) => {
+                if (!p) {
+                  track("simulation_playback_started", {
+                    cityA: a.city,
+                    cityB: b.city,
+                    lifeStage: persona.stage,
+                    month: atEnd ? 1 : month,
+                    isRestart: atEnd,
+                  });
+                }
+                return !p;
+              });
             }}
             className="rounded-full bg-ink text-paper w-11 h-11 flex items-center justify-center hover:opacity-90 shrink-0"
             aria-label={playing ? "Pause" : "Play"}
@@ -746,7 +812,14 @@ export default function Home() {
 
       <section className="mt-6 flex flex-wrap items-center gap-4">
         <button
-          onClick={() => setShowCard(true)}
+          onClick={() => {
+            setShowCard(true);
+            track("share_card_viewed", {
+              cityA: a.city,
+              cityB: b.city,
+              recommendation: synthesis.recommendation,
+            });
+          }}
           className="bg-ink text-paper px-5 py-2.5 rounded-lg text-sm hover:opacity-90"
         >
           Share decision

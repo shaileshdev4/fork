@@ -56,6 +56,21 @@ export default function PersonaSetup({
             leftoverMonthly: 0,
           }
         : undefined;
+
+    track("persona_completed", {
+      lifeStage: stage,
+      topValues: ranked,
+      kidsCount: stage === "family" ? kids : 0,
+      partnerEarns: stage !== "solo" ? partnerEarns : null,
+      hasCurrentCity: !!(curCity.trim() && rent),
+    });
+
+    // Update visitor profile so all downstream events carry persona dimensions.
+    identifyVisitor({
+      lifeStage: stage,
+      topValues: ranked.join(","),
+    });
+
     onDone({
       stage,
       kids: stage === "family" ? kids : 0,

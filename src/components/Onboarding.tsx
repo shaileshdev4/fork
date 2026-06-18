@@ -101,7 +101,11 @@ export default function Onboarding({
   }, [listening]);
 
   const submit = () => {
-    if (text.trim().length > 2) onSubmit(text.trim());
+    const t = text.trim();
+    if (t.length > 2) {
+      track("decision_sentence_submitted", { inputLength: t.length });
+      onSubmit(t);
+    }
   };
 
   return (
@@ -196,7 +200,10 @@ export default function Onboarding({
         </div>
 
         <button
-          onClick={() => onSubmit("Compare an Austin job at $130k with a San Francisco job at $200k")}
+          onClick={() => {
+            track("sample_decision_selected", {});
+            onSubmit("Compare an Austin job at $130k with a San Francisco job at $200k");
+          }}
           className="mt-4 text-sm text-muted hover:text-ink underline underline-offset-4"
         >
           Or just show me a sample decision →

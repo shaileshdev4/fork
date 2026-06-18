@@ -27,7 +27,9 @@ export default function StressBar({
   const isActive = active.kind !== "none";
 
   const submit = async () => {
-    if (text.trim().length < 3) return;
+    const query = text.trim();
+    if (query.length < 3) return;
+    track("what_if_query_submitted", { query, source: "natural_language" });
     setThinking(true);
     setWhatIfError(null);
     const ok = await askWhatIf(text.trim());
@@ -88,7 +90,14 @@ export default function StressBar({
             {STRESS_PRESETS.map((s) => (
               <button
                 key={s.id}
-                onClick={() => onApply(s.make())}
+                onClick={() => {
+                  track("stress_test_applied", {
+                    kind: s.id,
+                    label: s.label,
+                    source: "preset",
+                  });
+                  onApply(s.make());
+                }}
                 className="rounded-full border border-line hover:border-ink px-3 py-1.5 text-sm transition-colors"
                 title={s.blurb}
               >
