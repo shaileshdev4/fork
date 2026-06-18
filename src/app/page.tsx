@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { track } from "@/lib/analytics";
 import type { LifeProfile } from "@/lib/profile";
@@ -29,11 +30,27 @@ import ProfilePanel from "@/components/ProfilePanel";
 import SynthesisPanel from "@/components/SynthesisPanel";
 import TrustPanel from "@/components/TrustPanel";
 import StressBar from "@/components/StressBar";
+import StressHitBanner from "@/components/StressHitBanner";
 import ShareCard from "@/components/ShareCard";
+import { Logo } from "@/components/Logo";
 import type { Perturbation } from "@/lib/stress";
+import { normalizePerturbation, stressAtMonth } from "@/lib/stress";
 import { saveRun, loadRun, clearRun, type SavedRun } from "@/lib/persistence";
+import {
+  sfx,
+  setSoundEnabled,
+  setAmbientEnabled,
+  flashEventKind,
+} from "@/lib/sound";
+import { trackPendo } from "@/lib/pendo";
 
 type Phase = "onboarding" | "persona" | "sim";
+
+type StressSnapshot = {
+  choicesA: Choices;
+  choicesB: Choices;
+  month: number;
+};
 
 export default function Home() {
   const [phase, setPhase] = useState<Phase>("onboarding");
@@ -54,12 +71,12 @@ export default function Home() {
   const [narration, setNarration] = useState("");
   const [stress, setStress] = useState<Perturbation>({ kind: "none" });
   const [showCard, setShowCard] = useState(false);
+  const [sound, setSound] = useState(false);
   const pendingText = useRef<string>("");
   const [resumable, setResumable] = useState<SavedRun | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Holds latest sim state for the setInterval closure (avoids stale captures).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const simStateRef = useRef<Record<string, any>>({});
+  const preStress = useRef<StressSnapshot | null>(null);
+  const lastStressHitMonth = useRef(0);
 
   useEffect(() => {
     const r = decodeRun(window.location.search);
@@ -96,16 +113,30 @@ export default function Home() {
   }, [phase, a, b, persona, choicesA, choicesB]);
 
   const lifeA = useMemo(
-    () => simulate(a, persona, choicesA, horizon, stress),
+    () => simulate(a, persona, choicesA, horizon, stress, "play"),
     [a, persona, choicesA, horizon, stress],
   );
   const lifeB = useMemo(
-    () => simulate(b, persona, choicesB, horizon, stress),
+    () => simulate(b, persona, choicesB, horizon, stress, "play"),
     [b, persona, choicesB, horizon, stress],
   );
+  const lifeAProbe = useMemo(
+    () =>
+      stress.kind === "none"
+        ? lifeA
+        : simulate(a, persona, choicesA, horizon, stress, "probe"),
+    [a, persona, choicesA, horizon, stress, lifeA],
+  );
+  const lifeBProbe = useMemo(
+    () =>
+      stress.kind === "none"
+        ? lifeB
+        : simulate(b, persona, choicesB, horizon, stress, "probe"),
+    [b, persona, choicesB, horizon, stress, lifeB],
+  );
   const synthesis = useMemo(
-    () => synthesize(a, b, lifeA, lifeB, persona),
-    [a, b, lifeA, lifeB, persona],
+    () => synthesize(a, b, lifeAProbe, lifeBProbe, persona),
+    [a, b, lifeAProbe, lifeBProbe, persona],
   );
 
   // Keep simStateRef current so the setInterval closure can read the latest values.
@@ -126,12 +157,14 @@ export default function Home() {
     const pb = lifeB.months[lifeB.months.length - 1]?.pendingDecision;
     if (pa && month >= pa.month) {
       setPlaying(false);
+      if (sound) sfx.decision();
       setActiveDecision({ lane: "A", decisionId: pa.id });
     } else if (pb && month >= pb.month) {
       setPlaying(false);
+      if (sound) sfx.decision();
       setActiveDecision({ lane: "B", decisionId: pb.id });
     }
-  }, [phase, month, lifeA.months, lifeB.months, activeDecision]);
+  }, [phase, month, lifeA.months, lifeB.months, activeDecision, sound]);
 
   const handleChoose = useCallback(
     (optionId: string) => {
@@ -149,9 +182,15 @@ export default function Home() {
       });
       if (lane === "A") setChoicesA((c) => ({ ...c, [decisionId]: optionId }));
       else setChoicesB((c) => ({ ...c, [decisionId]: optionId }));
+      if (sound) sfx.confirm();
+      trackPendo("fork_decision_made", {
+        lane,
+        decision_id: decisionId,
+        option_id: optionId,
+      });
       setActiveDecision(null);
     },
-    [activeDecision, persona.stage, a.city, b.city],
+    [activeDecision, sound],
   );
 
   useEffect(() => {
@@ -171,13 +210,14 @@ export default function Home() {
           });
           return m;
         }
+        if (sound) sfx.tick();
         return m + 1;
       });
     }, 420);
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
-  }, [playing, horizon]);
+  }, [playing, horizon, sound]);
 
   // Onboarding sentence -> parse (store, then go to persona step)
   const handleOnboard = useCallback(async (text: string) => {
@@ -236,6 +276,12 @@ export default function Home() {
         aiParsed: res.ok,
       });
       setPhase("persona");
+      trackPendo("onboarding_parsed", {
+        city_a: pa.city,
+        city_b: pb.city,
+        country_a: pa.country,
+        country_b: pb.country,
+      });
     } catch {
       setPhase("persona");
     } finally {
@@ -251,7 +297,15 @@ export default function Home() {
     setChoicesA({});
     setChoicesB({});
     setMonth(1);
+    setStress({ kind: "none" });
+    preStress.current = null;
+    setActiveDecision(null);
     setPhase("sim");
+    trackPendo("persona_selected", {
+      stage: pp.stage,
+      kids: pp.kids,
+      top_value: pp.values[0],
+    });
   }, []);
 
   // AI narration of the synthesis (speaks to their values)
@@ -305,20 +359,137 @@ export default function Home() {
     persona,
   ]);
 
-  const askWhatIf = useCallback(async (text: string) => {
-    try {
-      const res = await fetch("/api/whatif", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+  const beginStressReplay = useCallback(
+    (p: Perturbation) => {
+      setStress((cur) => {
+        if (cur.kind === "none") {
+          preStress.current = { choicesA, choicesB, month };
+        }
+        return p;
       });
-      const p = await res.json();
-      if (p && p.kind) {
-        setStress(p);
-        setMonth(1);
-      }
-    } catch {}
+      setChoicesA({});
+      setChoicesB({});
+      setMonth(1);
+      setActiveDecision(null);
+      setPlaying(false);
+      lastFlashMonth.current = 0;
+      lastStressHitMonth.current = 0;
+      trackPendo("stress_test_applied", {
+        kind: p.kind,
+        at_month: "atMonth" in p ? p.atMonth : null,
+      });
+    },
+    [choicesA, choicesB, month],
+  );
+
+  const clearStress = useCallback(() => {
+    const snap = preStress.current;
+    if (snap) {
+      setChoicesA(snap.choicesA);
+      setChoicesB(snap.choicesB);
+      setMonth(snap.month);
+      preStress.current = null;
+    }
+    setStress({ kind: "none" });
+    setActiveDecision(null);
+    setPlaying(false);
+    lastFlashMonth.current = 0;
+    lastStressHitMonth.current = 0;
   }, []);
+
+  const restartRun = useCallback(() => {
+    setPlaying(false);
+    setMonth(1);
+    setChoicesA({});
+    setChoicesB({});
+    setActiveDecision(null);
+    lastFlashMonth.current = 0;
+    lastStressHitMonth.current = 0;
+  }, []);
+
+  const askWhatIf = useCallback(
+    async (text: string): Promise<boolean> => {
+      try {
+        const res = await fetch("/api/whatif", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const p = normalizePerturbation(await res.json());
+        if (p) {
+          beginStressReplay(p);
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    },
+    [beginStressReplay],
+  );
+
+  const toggleSound = useCallback(() => {
+    setSound((on) => {
+      const next = !on;
+      setSoundEnabled(next);
+      setAmbientEnabled(next);
+      if (next) sfx.confirm();
+      return next;
+    });
+  }, []);
+
+  const lastFlashMonth = useRef(0);
+  const verdictPlayed = useRef(false);
+
+  useEffect(() => {
+    if (month < horizon) verdictPlayed.current = false;
+  }, [month, horizon]);
+
+  useEffect(() => {
+    if (phase !== "sim" || !sound || month < horizon) return;
+    if (!verdictPlayed.current) {
+      verdictPlayed.current = true;
+      sfx.verdict();
+    }
+  }, [phase, month, horizon, sound]);
+
+  useEffect(() => {
+    if (!sound || stress.kind === "none") return;
+    const hitMonth = stressAtMonth(stress);
+    if (
+      hitMonth &&
+      month === hitMonth &&
+      month !== lastStressHitMonth.current
+    ) {
+      lastStressHitMonth.current = month;
+      sfx.negative();
+    }
+  }, [month, sound, stress]);
+
+  useEffect(() => {
+    if (!sound || !playing) return;
+    if (stateA?.stressHit || stateB?.stressHit) return;
+    const flash = stateA?.flash || stateB?.flash;
+    if (!flash || month === lastFlashMonth.current) return;
+    lastFlashMonth.current = month;
+
+    const eventKind = flashEventKind(flash);
+    if (eventKind === "car") {
+      sfx.eventCar();
+      return;
+    }
+    if (eventKind === "medical") {
+      sfx.eventMedical();
+      return;
+    }
+
+    const celebrating =
+      stateA?.mood === "celebrating" || stateB?.mood === "celebrating";
+    const stressed =
+      stateA?.mood === "stressed" || stateB?.mood === "stressed";
+    if (celebrating) sfx.celebrate();
+    else if (stressed) sfx.negative();
+  }, [month, sound, playing, stateA, stateB]);
 
   const share = useCallback(() => {
     const qs = encodeRun(a, b, horizon);
@@ -331,6 +502,7 @@ export default function Home() {
       recommendation: synthesis.recommendation,
     });
     setCopied(true);
+    trackPendo("share_link_copied", { city_a: a.city, city_b: b.city });
     setTimeout(() => setCopied(false), 1800);
   }, [a, b, horizon, synthesis.recommendation]);
 
@@ -361,28 +533,63 @@ export default function Home() {
     ? deckFor(persona.stage).find((d) => d.id === activeDecision.decisionId)
     : null;
 
+  const stressMonth = stressAtMonth(stress);
+  const stressFlashNow = stateA?.stressHit || stateB?.stressHit;
+
   return (
     <main className="max-w-4xl mx-auto px-4 py-8 md:py-12">
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.25em] text-muted mb-2">
-            <span className="h-px w-6" style={{ background: THEME_A.accent }} />
-            Fork
-            <span className="h-px w-6" style={{ background: THEME_B.accent }} />
-          </div>
+          <Logo
+            variant="eyebrow"
+            size={18}
+            accentA={THEME_A.accent}
+            accentB={THEME_B.accent}
+            className="mb-2"
+          />
           <h1 className="font-display text-2xl md:text-3xl leading-tight text-ink">
             {a.city} vs {b.city}: live both, then choose.
           </h1>
         </div>
-        <button
-          onClick={() => {
-            setPhase("onboarding");
-            setNarration("");
-          }}
-          className="text-xs text-muted hover:text-ink underline underline-offset-4 shrink-0 mt-1"
-        >
-          New decision
-        </button>
+        <div className="flex items-center gap-3 shrink-0 mt-1">
+          <button
+            onClick={toggleSound}
+            aria-label={sound ? "Mute sound" : "Enable sound"}
+            title={sound ? "Sound on" : "Sound off"}
+            className="text-muted hover:text-ink"
+          >
+            {sound ? (
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 2.5L4.5 5.5H2v5h2.5L8 13.5v-11z" />
+                <path
+                  d="M10.5 5.5a3 3 0 0 1 0 5M12.5 3.5a6 6 0 0 1 0 9"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  fill="none"
+                />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 2.5L4.5 5.5H2v5h2.5L8 13.5v-11z" />
+                <path
+                  d="M11 6l3 3M14 6l-3 3"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  fill="none"
+                />
+              </svg>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setPhase("onboarding");
+              setNarration("");
+            }}
+            className="text-xs text-muted hover:text-ink underline underline-offset-4"
+          >
+            New decision
+          </button>
+        </div>
       </header>
 
       {persona.current && (
@@ -449,6 +656,10 @@ export default function Home() {
         />
       </div>
 
+      {stress.kind !== "none" && (
+        <StressHitBanner stress={stress} month={month} />
+      )}
+
       <div className="mt-5 rounded-xl border border-line bg-paper p-4">
         <div className="flex items-center gap-3">
           <button
@@ -493,11 +704,21 @@ export default function Home() {
             )}
           </button>
           <div className="flex-1">
-            <div className="h-2 rounded-full bg-ink/10 overflow-hidden">
+            <div className="relative h-2 rounded-full bg-ink/10 overflow-hidden">
               <div
                 className="h-full rounded-full bg-ink transition-all"
                 style={{ width: `${(month / horizon) * 100}%` }}
               />
+              {stressMonth && (
+                <div
+                  className="absolute top-0 w-0.5 h-full -translate-x-1/2 pointer-events-none"
+                  style={{
+                    left: `${(stressMonth / horizon) * 100}%`,
+                    background: "#8c3f2c",
+                  }}
+                  title={`Stress shock at month ${stressMonth}`}
+                />
+              )}
             </div>
             <div className="flex justify-between text-[11px] text-muted mt-1 tnum">
               <span>Month {month}</span>
@@ -508,18 +729,31 @@ export default function Home() {
             </div>
           </div>
           <button
-            onClick={() => {
-              setPlaying(false);
-              setMonth(1);
-            }}
+            onClick={restartRun}
             className="text-sm text-muted hover:text-ink underline underline-offset-4 shrink-0"
+            title={
+              stress.kind !== "none"
+                ? "Replay forks from month 1 under this stress test"
+                : "Replay forks from month 1"
+            }
           >
             Restart
           </button>
         </div>
         <div className="mt-3 min-h-[40px] flex items-center">
           {stateA?.flash || stateB?.flash ? (
-            <p className="text-xs text-ink/80 px-1">
+            <p
+              className={`text-xs px-1 rounded-lg w-full py-1.5 ${
+                stressFlashNow
+                  ? "text-[#8c3f2c] font-medium"
+                  : "text-ink/80"
+              }`}
+              style={
+                stressFlashNow
+                  ? { background: "#b0593f14" }
+                  : undefined
+              }
+            >
               {stateA?.flash && (
                 <span className="mr-3">
                   <b style={{ color: THEME_A.accent }}>{a.label}:</b>{" "}
@@ -537,7 +771,9 @@ export default function Home() {
             <p className="text-xs text-muted px-1">
               {playing
                 ? "Time is passing…"
-                : "Press play - life will ask you to choose."}
+                : stress.kind !== "none"
+                  ? "Press play - make your forks again under this stress test."
+                  : "Press play - life will ask you to choose."}
             </p>
           )}
         </div>
@@ -545,13 +781,8 @@ export default function Home() {
 
       <StressBar
         active={stress}
-        onApply={(p) => {
-          setStress(p);
-          setMonth(1);
-        }}
-        onClear={() => {
-          setStress({ kind: "none" });
-        }}
+        onApply={beginStressReplay}
+        onClear={clearStress}
         askWhatIf={askWhatIf}
       />
 
@@ -568,8 +799,8 @@ export default function Home() {
       </section>
 
       <section className="mt-6 grid md:grid-cols-2 gap-4">
-        <ProfilePanel profile={a} theme={THEME_A} onChange={setA} />
-        <ProfilePanel profile={b} theme={THEME_B} onChange={setB} />
+        <ProfilePanel profile={a} theme={THEME_A} onChange={setA} cityScope="play" />
+        <ProfilePanel profile={b} theme={THEME_B} onChange={setB} cityScope="play" />
       </section>
 
       <section className="mt-4">
@@ -603,7 +834,10 @@ export default function Home() {
 
       <footer className="text-xs text-muted border-t border-line pt-6 mt-10">
         Fork · live the decision before you make it · United States, Canada
-        &amp; India · 2025 tax year · a simulator, not financial advice
+        &amp; India · 2025 tax year · a simulator, not financial advice ·{" "}
+        <Link href="/calculator" className="text-ink underline underline-offset-4">
+          City calculator
+        </Link>
       </footer>
 
       {showCard && (

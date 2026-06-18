@@ -8,78 +8,60 @@ Work through sections in order. Check boxes as you go.
 
 ---
 
-## Readiness snapshot (as of checklist creation)
+## Readiness snapshot
 
 | Area | Status |
 |------|--------|
-| App builds (`npm run build`) | ✅ Passes |
-| Core product (sim, decisions, share URL) | ✅ Implemented |
-| Art assets (`public/assets/`, 15 PNGs) | ✅ Present |
-| Git repo + GitHub | ❌ Not initialized |
-| Public deploy (Vercel URL) | ❌ Not deployed |
-| Novus.ai | ❌ Not installed |
-| Demo video | ❌ Not recorded |
-| Devpost submission | ❌ Not submitted |
+| App builds (`npm run build`) | ✅ |
+| Core product (sim, decisions, share URL) | ✅ |
+| Art assets (`public/assets/`, 15 PNGs) | ✅ |
+| Git repo + GitHub (`shaileshdev4/fork`) | ✅ |
+| Public deploy (Vercel) | ✅ |
+| Novus.ai installed | ✅ |
+| Novus usage + dashboard screenshot | ⬜ |
+| Privacy page (Novus/Pendo) | ⬜ |
+| Demo video (2–3 min) | ⬜ |
+| Devpost submission | ⬜ |
 
-**Verdict:** Fork is **not submission-ready yet** — the product works locally, but hackathon requirements (live URL, Novus, video, Devpost) are still open.
+**Verdict:** Fork is **almost submission-ready** — finish Novus screenshot, privacy page, demo video, then submit on Devpost.
 
 ---
 
-## 1. GitHub & repository
-
-> **You are here.** Fork is not a git repo yet — complete this section first.
+## 1. GitHub & repository ✅
 
 ### 1.1 Local git setup
 
-- [ ] Add `.env` to `.gitignore` (currently only `.env*.local` is ignored — `.env` can leak keys)
-- [ ] Confirm `.gitignore` excludes `node_modules`, `.next`, `.env`, `.env.local`
-- [ ] Confirm `.env` and `.env.local` are **not** tracked (only `.env.example` is committed)
-- [ ] Initialize git in the `fork` folder:
-  ```bash
-  cd fork-decision-simulator/fork
-  git init
-  git add .
-  git status
-  ```
-- [ ] Verify `git status` does **not** list `.env`, `.env.local`, `node_modules`, or `.next`
-- [ ] First commit:
-  ```bash
-  git commit -m "Initial commit: Fork decision simulator"
-  ```
+- [x] Add `.env` to `.gitignore`
+- [x] Confirm `.gitignore` excludes `node_modules`, `.next`, `.env`, `.env.local`
+- [x] Confirm `.env` and `.env.local` are **not** tracked (only `.env.example` is committed)
+- [x] Initialize git in the `fork` folder
+- [x] Verify `git status` does **not** list `.env`, `.env.local`, `node_modules`, or `.next`
+- [x] 15 progressive commits on `main`
 
 ### 1.2 Create GitHub remote
 
-- [ ] Create a new **public** repo on GitHub (e.g. `fork` or `fork-decision-simulator`)
-- [ ] Do **not** add a README/license on GitHub if you already have a local README (avoid merge conflicts)
-- [ ] Add remote and push:
-  ```bash
-  git branch -M main
-  git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
-  git push -u origin main
-  ```
-- [ ] Open the repo on GitHub and confirm source files are visible (no `.env`)
+- [x] Public repo: `shaileshdev4/fork`
+- [x] Pushed to `origin/main`
 
-### 1.3 Repo hygiene (before judges / Novus)
+### 1.3 Repo hygiene
 
-- [ ] README describes what Fork is and how to run locally
-- [ ] `.env.example` lists all env vars (no real keys)
-- [ ] No `GROQ_API_KEY` or `RENTCAST_API_KEY` in committed files
-- [ ] Optional: add `LICENSE` if you want open source
+- [x] README describes what Fork is and how to run locally
+- [x] `.env.example` lists all env vars (no real keys)
+- [x] No API keys in committed files
+- [ ] Optional: add `LICENSE`
 
-**Done when:** GitHub repo is public, pushed, and contains no secrets.
+**Done when:** GitHub repo is public, pushed, and contains no secrets. ✅
 
 ---
 
-## 2. Environment & API keys (optional but recommended for demo)
+## 2. Environment & API keys
 
 Fork **works without keys** (typed input + bundled 2025 data + templated verdict). Keys unlock the full experience for judges.
 
-- [ ] Copy `.env.example` → `.env.local` locally
-- [ ] **Groq** (`GROQ_API_KEY`) — AI sentence parsing, narration, what-if
-  - Get key: https://console.groq.com/keys
-- [ ] **RentCast** (`RENTCAST_API_KEY`) — live US rent lookup (optional; has bundled fallback)
-  - Get key: https://app.rentcast.io/app/api
-- [ ] Smoke test locally with keys:
+- [x] Copy `.env.example` → `.env.local` locally
+- [x] **Groq** (`GROQ_API_KEY`) — AI sentence parsing, narration, what-if
+- [ ] **RentCast** (`RENTCAST_API_KEY`) — optional; bundled fallback exists
+- [ ] Smoke test **production** with keys:
   - [ ] Onboarding: type or voice a decision sentence → parses into two paths
   - [ ] Persona setup → sim loads
   - [ ] Play / scrub timeline
@@ -87,21 +69,16 @@ Fork **works without keys** (typed input + bundled 2025 data + templated verdict
   - [ ] View synthesis / verdict
   - [ ] Share URL copies and reloads state
 
-**Done when:** Full AI path works locally (or you accept demoing without keys).
+**Done when:** Full AI path works on your live Vercel URL.
 
 ---
 
-## 3. Deploy (public URL)
+## 3. Deploy (public URL) ✅
 
-Hackathon requires a **clickable live URL** — not “clone and run locally.”
-
-- [ ] Import GitHub repo into [Vercel](https://vercel.com)
-- [ ] Set environment variables in Vercel (from `.env.example`):
-  - `GROQ_API_KEY` (recommended for demo)
-  - `GROQ_MODEL` (optional, default `llama-3.3-70b-versatile`)
-  - `RENTCAST_API_KEY` (optional)
-- [ ] Deploy succeeds (`npm run build` passes on Vercel)
-- [ ] Smoke test production:
+- [x] Import GitHub repo into [Vercel](https://vercel.com)
+- [x] Set environment variables in Vercel (`GROQ_API_KEY`, etc.)
+- [x] Deploy succeeds
+- [ ] Smoke test production (run through once on live URL):
   - [ ] Home / onboarding loads
   - [ ] Complete onboarding → persona → simulation
   - [ ] Images load (`/assets/city-austin.png`, etc.)
@@ -110,20 +87,20 @@ Hackathon requires a **clickable live URL** — not “clone and run locally.”
   - [ ] Share URL works on production domain
   - [ ] AI parse + narrate work (if keys set)
 
-**Done when:** You have a stable public URL to put on Devpost.
+**Done when:** Stable public URL ready for Devpost. ✅ (verify smoke test above)
 
 ---
 
 ## 4. Novus.ai (required for prizes)
 
-[Novus](https://www.novus.ai/) auto-instruments your app from the GitHub repo. Sign up: [novus.pendo.io](https://novus.pendo.io).
+> **You are here.** Novus is installed — generate usage and grab the screenshot.
 
-- [ ] Sign up for Novus (free open beta)
-- [ ] Connect the **Fork GitHub repo** to Novus
-- [ ] Grant Novus permission to open PRs on the repo
-- [ ] Review Novus instrumentation PR → merge
-- [ ] Redeploy Vercel after merge
-- [ ] Generate real usage on production (you + 1–2 friends):
+- [x] Sign up for Novus
+- [x] Connect Fork GitHub repo to Novus
+- [x] Grant Novus permission to open PRs
+- [x] Review Novus instrumentation PR → merge
+- [x] Redeploy Vercel after merge
+- [ ] Generate real usage on **production** (you + 1–2 friends):
   - [ ] Land on `/`
   - [ ] Complete onboarding (voice or text)
   - [ ] Set persona
@@ -134,9 +111,9 @@ Hackathon requires a **clickable live URL** — not “clone and run locally.”
 - [ ] Open Novus dashboard — confirm events/flows appear
 - [ ] **Screenshot Novus dashboard** (required for Devpost submission)
 
-**Tip for demo:** Novus README notes likely drop-off at **onboarding → sim** — instrument and mention that insight in your video.
+**Tip for demo:** Likely drop-off at **onboarding → sim** — mention that insight in your video.
 
-**Done when:** Novus is installed on deployed app and dashboard shows behavior.
+**Done when:** Novus dashboard screenshot saved.
 
 ---
 
@@ -165,7 +142,7 @@ Novus/Pendo collects behavioral analytics — users should be informed.
   - **What:** Fork — live the decision before you make it
   - **Who:** Anyone facing a real fork (move, job offer, city change)
   - **Tools:** Cursor, Next.js 15, TypeScript, Motion, Groq, RentCast
-  - **Learnings:** What you learned shipping it (cohesion, sourced numbers, interactive decisions)
+  - **Learnings:** What you learned shipping it
 - [ ] Optional: post progress with `#EveryoneShipsNow` and tag @MindTheProduct
 
 **Done when:** Video URL ready; description drafted.
@@ -192,6 +169,7 @@ Submit at [mindtheproduct.devpost.com](https://mindtheproduct.devpost.com/) befo
 | Item | Location |
 |------|----------|
 | Product name | **Fork** (package: `financial-fork-simulator`) |
+| GitHub | `shaileshdev4/fork` |
 | Env template | `.env.example` |
 | Art assets | `public/assets/` (15 PNGs) |
 | API routes | `src/app/api/parse`, `narrate`, `rent`, `whatif` |
@@ -212,4 +190,4 @@ Submit at [mindtheproduct.devpost.com](https://mindtheproduct.devpost.com/) befo
 
 ---
 
-*Last updated: checklist created — start with section 1 (GitHub).*
+_Last updated: GitHub pushed, Vercel deployed, Novus installed._

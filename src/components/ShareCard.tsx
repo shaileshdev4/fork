@@ -7,6 +7,7 @@ import { VALUE_LABEL } from "@/lib/persona";
 import type { Synthesis } from "@/lib/synthesis";
 import type { SimulatedLife } from "@/lib/simulation";
 import type { LaneTheme } from "@/lib/scenario";
+import { Logo } from "@/components/Logo";
 
 function fmt(n: number, c: string) {
   return n.toLocaleString("en-US", {
@@ -74,17 +75,13 @@ export default function ShareCard({
               background: `linear-gradient(135deg, ${themeA.accentSoft}, ${themeB.accentSoft})`,
             }}
           >
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-ink/60">
-              <span
-                className="h-px w-5"
-                style={{ background: themeA.accent }}
-              />
-              Fork
-              <span
-                className="h-px w-5"
-                style={{ background: themeB.accent }}
-              />
-            </div>
+            <Logo
+              variant="eyebrow"
+              size={16}
+              accentA={themeA.accent}
+              accentB={themeB.accent}
+              className="text-ink/60"
+            />
             <h2 className="font-display text-2xl text-ink mt-2 leading-tight">
               {a.city} vs {b.city}
             </h2>

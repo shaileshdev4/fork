@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 32" fill="none">
+  <path d="M5 20.5 L5 12.5" stroke="#1a1d29" stroke-width="1.85" stroke-linecap="round" transform="translate(0 5)"/>
+  <path d="M5 12.5 L17 3.5" stroke="#c77b30" stroke-width="1.85" stroke-linecap="round" transform="translate(0 5)"/>
+  <path d="M5 12.5 L17 19.5" stroke="#2f7d77" stroke-width="1.85" stroke-linecap="round" transform="translate(0 5)"/>
+  <circle cx="5" cy="17.5" r="2" fill="#1a1d29"/>
+  <circle cx="17" cy="8.5" r="1.6" fill="#c77b30"/>
+  <circle cx="17" cy="24.5" r="1.6" fill="#2f7d77"/>
+  <text
+    x="28"
+    y="22"
+    fill="#1a1d29"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="18"
+    font-weight="600"
+    letter-spacing="-0.02em"
+  >
+    Fork
+  </text>
+</svg>

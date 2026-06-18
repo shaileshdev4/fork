@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import type { Perturbation } from "@/lib/stress";
-import { STRESS_PRESETS, describePerturbation } from "@/lib/stress";
-import { track } from "@/lib/analytics";
+import { STRESS_PRESETS, describePerturbation, stressAtMonth } from "@/lib/stress";
 
 /**
  * Stress-test (#7) + natural-language what-if (#6). Real decisions are made on
@@ -20,10 +19,11 @@ export default function StressBar({
   active: Perturbation;
   onApply: (p: Perturbation) => void;
   onClear: () => void;
-  askWhatIf: (text: string) => Promise<void>;
+  askWhatIf: (text: string) => Promise<boolean>;
 }) {
   const [text, setText] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [whatIfError, setWhatIfError] = useState<string | null>(null);
   const isActive = active.kind !== "none";
 
   const submit = async () => {
@@ -31,8 +31,14 @@ export default function StressBar({
     if (query.length < 3) return;
     track("what_if_query_submitted", { query, source: "natural_language" });
     setThinking(true);
-    await askWhatIf(query);
+    setWhatIfError(null);
+    const ok = await askWhatIf(text.trim());
     setThinking(false);
+    if (!ok) {
+      setWhatIfError("Couldn't map that — try a preset or rephrase.");
+    } else {
+      setText("");
+    }
   };
 
   return (
@@ -73,8 +79,9 @@ export default function StressBar({
             />
           </svg>
           <span>
-            Testing: {describePerturbation(active)}. Watch how each life holds
-            up.
+            Testing: {describePerturbation(active)}. Choices reset - press play
+            to live both paths again under this shock (lands month{" "}
+            {stressAtMonth(active)}). Clear restores your path before the test.
           </span>
         </motion.div>
       ) : (
@@ -101,7 +108,10 @@ export default function StressBar({
           <div className="flex items-center gap-2 mt-3">
             <input
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (whatIfError) setWhatIfError(null);
+              }}
               onKeyDown={(e) => e.key === "Enter" && submit()}
               placeholder="or ask: what if I lose my job in year 2?"
               className="flex-1 bg-paper border border-line rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-ink placeholder:text-muted/60"
@@ -114,6 +124,9 @@ export default function StressBar({
               {thinking ? "…" : "Test"}
             </button>
           </div>
+          {whatIfError && (
+            <p className="mt-2 text-xs text-[#8c3f2c]">{whatIfError}</p>
+          )}
         </>
       )}
     </div>

@@ -29,10 +29,13 @@ export default function ProfilePanel({
   profile,
   theme,
   onChange,
+  cityScope = "play",
 }: {
   profile: LifeProfile;
   theme: LaneTheme;
   onChange: (p: LifeProfile) => void;
+  /** "play" locks city to this fork; "all" exposes every supported city (calculator). */
+  cityScope?: "play" | "all";
 }) {
   const [open, setOpen] = useState(false);
   const set = (patch: Partial<LifeProfile>) =>
@@ -99,25 +102,35 @@ export default function ProfilePanel({
         <span className="text-[11px] uppercase tracking-wider text-muted">
           City
         </span>
-        <CitySelect
-          profile={profile}
-          onPick={(city, region, ctry) => {
-            const s = snapshotFor(city, ctry, region);
-            set({
-              city,
-              region,
-              country: ctry,
-              currency: currencyForCountry(ctry),
-              rentMonthly: s.rentMonthly,
-              rentSource: s.rentSource,
-              groceriesMonthly: s.groceriesMonthly,
-              transportMonthly: s.transportMonthly,
-              utilitiesMonthly: s.utilitiesMonthly,
-              otherMonthly: s.otherMonthly,
-              costSource: s.costSource,
-            });
-          }}
-        />
+        {cityScope === "play" ? (
+          <div
+            className="mt-1 w-full bg-paper/60 border border-line rounded-lg px-3 py-2 text-sm text-ink"
+            aria-label={`City: ${profile.city}`}
+          >
+            {profile.city}
+            <span className="text-muted">, {profile.region}</span>
+          </div>
+        ) : (
+          <CitySelect
+            profile={profile}
+            onPick={(city, region, ctry) => {
+              const s = snapshotFor(city, ctry, region);
+              set({
+                city,
+                region,
+                country: ctry,
+                currency: currencyForCountry(ctry),
+                rentMonthly: s.rentMonthly,
+                rentSource: s.rentSource,
+                groceriesMonthly: s.groceriesMonthly,
+                transportMonthly: s.transportMonthly,
+                utilitiesMonthly: s.utilitiesMonthly,
+                otherMonthly: s.otherMonthly,
+                costSource: s.costSource,
+              });
+            }}
+          />
+        )}
       </label>
 
       <SliderRow
