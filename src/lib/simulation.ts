@@ -14,6 +14,25 @@ import { varietyEvents, type MicroEvent } from "./variety";
 
 export type Mood = "relaxed" | "stressed" | "celebrating";
 
+export type LedgerOrigin =
+  | { kind: "baseline" }
+  | {
+      kind: "decision";
+      decisionId: string;
+      decisionMonth: number;
+      choiceLabel: string;
+    }
+  | { kind: "stress"; label: string }
+  | { kind: "micro"; label: string };
+
+export type LedgerLine = {
+  id: string;
+  label: string;
+  /** Negative = outflow, positive = inflow. */
+  amount: number;
+  origin?: LedgerOrigin;
+};
+
 export type MonthState = {
   month: number;
   balance: number;
@@ -25,10 +44,12 @@ export type MonthState = {
   mood: Mood;
   pendingDecision?: Decision;
   flash?: string;
-  /** True the month the stress shock first lands (banner + sound). */
   stressHit?: boolean;
-  /** True while stress is still affecting this month's math. */
   underStress?: boolean;
+  /** Per-month audit trail — same math as balance, line by line. */
+  ledger: LedgerLine[];
+  priorBalance: number;
+  balanceDelta: number;
 };
 
 export type SimulatedLife = {
@@ -41,11 +62,41 @@ export type SimulatedLife = {
 
 export type Choices = Record<string, string>;
 
-/** play = stop at forks for the user; probe = fill defaults for stress synthesis */
 export type SimMode = "play" | "probe";
 
 const APY = 0.04;
-type ActiveInstallment = { monthly: number; remaining: number };
+
+type ActiveInstallment = {
+  monthly: number;
+  remaining: number;
+  decisionId: string;
+  decisionMonth: number;
+  choiceLabel: string;
+};
+
+type OngoingDelta = {
+  amount: number;
+  decisionId: string;
+  decisionMonth: number;
+  choiceLabel: string;
+  kind: "spend" | "income";
+};
+
+function originTag(o: LedgerOrigin | undefined): string | undefined {
+  if (!o) return undefined;
+  switch (o.kind) {
+    case "baseline":
+      return undefined;
+    case "decision":
+      return `from month ${o.decisionMonth} · ${o.choiceLabel}`;
+    case "stress":
+      return o.label;
+    case "micro":
+      return o.label;
+  }
+}
+
+export { originTag };
 
 export function simulate(
   p: LifeProfile,
@@ -57,12 +108,8 @@ export function simulate(
 ): SimulatedLife {
   const country = getCountry(p.country);
   const tax = country.compute(p.salary, p.region);
-  // Household-aware baseline: a family's essentials are higher (more food, etc.)
-  // and carry dedicated lines like childcare that generic tools miss.
-  const extras = householdExtraMonthly(persona, p.currency).reduce(
-    (s, e) => s + e.amount,
-    0,
-  );
+  const householdExtras = householdExtraMonthly(persona, p.currency);
+  const extras = householdExtras.reduce((s, e) => s + e.amount, 0);
   const baseBurn = essentialsMonthly(p) + extras;
   const monthlyRate = APY / 12;
   const deck = deckFor(persona.stage);
@@ -79,6 +126,8 @@ export function simulate(
     incomeDelta = 0,
     savingsRate = p.savingsRate;
   const installments: ActiveInstallment[] = [];
+  const ongoingSpends: OngoingDelta[] = [];
+  const ongoingIncomes: OngoingDelta[] = [];
   let minRunway = Infinity,
     everNegative = false;
 
@@ -86,6 +135,23 @@ export function simulate(
   for (const d of deck) decByMonth.set(d.month, d);
 
   for (let m = 1; m <= horizon; m++) {
+    const priorBalance = Math.round(balance);
+    const ledger: LedgerLine[] = [];
+    let lineId = 0;
+    const push = (
+      label: string,
+      amount: number,
+      origin?: LedgerOrigin,
+    ) => {
+      if (amount === 0) return;
+      ledger.push({
+        id: `${m}-${lineId++}`,
+        label,
+        amount: Math.round(amount),
+        origin,
+      });
+    };
+
     let flash: string | undefined, pending: Decision | undefined;
     const decision = decByMonth.get(m);
     if (decision) {
@@ -93,16 +159,45 @@ export function simulate(
       let opt = chosenId
         ? decision.options(p, persona).find((o) => o.id === chosenId)
         : undefined;
-      // Stress-test runs the full horizon: unresolved forks use the first option
-      // as a neutral projection so shocks at month 12+ still apply.
       if (!opt && stressProbe) {
         opt = decision.options(p, persona)[0];
       }
       if (opt) {
         const e: DecisionEffect = opt.effect;
-        if (e.oneTime) balance += e.oneTime;
-        if (e.monthlySpendDelta) spendDelta += e.monthlySpendDelta;
-        if (e.monthlyIncomeDelta) incomeDelta += e.monthlyIncomeDelta;
+        const origin: LedgerOrigin = {
+          kind: "decision",
+          decisionId: decision.id,
+          decisionMonth: m,
+          choiceLabel: opt.label,
+        };
+        if (e.oneTime) {
+          balance += e.oneTime;
+          push(
+            e.oneTime < 0 ? "One-time cost (decision)" : "One-time gain (decision)",
+            e.oneTime,
+            origin,
+          );
+        }
+        if (e.monthlySpendDelta) {
+          spendDelta += e.monthlySpendDelta;
+          ongoingSpends.push({
+            amount: e.monthlySpendDelta,
+            decisionId: decision.id,
+            decisionMonth: m,
+            choiceLabel: opt.label,
+            kind: "spend",
+          });
+        }
+        if (e.monthlyIncomeDelta) {
+          incomeDelta += e.monthlyIncomeDelta;
+          ongoingIncomes.push({
+            amount: e.monthlyIncomeDelta,
+            decisionId: decision.id,
+            decisionMonth: m,
+            choiceLabel: opt.label,
+            kind: "income",
+          });
+        }
         if (e.savingsRateDelta)
           savingsRate = Math.max(
             0,
@@ -112,6 +207,9 @@ export function simulate(
           installments.push({
             monthly: e.installment.monthly,
             remaining: e.installment.months,
+            decisionId: decision.id,
+            decisionMonth: m,
+            choiceLabel: opt.label,
           });
         flash = opt.consequence;
       } else {
@@ -120,7 +218,6 @@ export function simulate(
     }
 
     const burnBase = baseBurn + spendDelta;
-    // --- apply stress perturbation for this month ---
     let pertIncomeMult = 1;
     let pertIncomeAbs = 0;
     let pertBurnMult = 1;
@@ -157,6 +254,10 @@ export function simulate(
       case "big_expense":
         if (m === pert.atMonth) {
           balance -= pert.amount;
+          push(`Stress: ${pert.label}`, -pert.amount, {
+            kind: "stress",
+            label: "stress test",
+          });
           pertFlash = `${pert.label}.`;
         }
         break;
@@ -167,18 +268,98 @@ export function simulate(
       (s, i) => s + (i.remaining > 0 ? i.monthly : 0),
       0,
     );
-    const income = Math.max(
-      0,
-      (tax.netMonthly + incomeDelta) * pertIncomeMult + pertIncomeAbs,
-    );
+    const baseIncome = tax.netMonthly + incomeDelta;
+    const income = Math.max(0, baseIncome * pertIncomeMult + pertIncomeAbs);
+
+    // --- ledger: income ---
+    push("Take-home income", tax.netMonthly, { kind: "baseline" });
+    for (const o of ongoingIncomes) {
+      push("Income adjustment", o.amount, {
+        kind: "decision",
+        decisionId: o.decisionId,
+        decisionMonth: o.decisionMonth,
+        choiceLabel: o.choiceLabel,
+      });
+    }
+    if (pertIncomeMult !== 1 && pert.kind !== "none") {
+      const cut = Math.round(baseIncome * (1 - pertIncomeMult));
+      if (cut > 0)
+        push("Stress: income reduction", -cut, {
+          kind: "stress",
+          label: pertFlash ?? "stress test",
+        });
+    }
+    if (pertIncomeAbs < 0) {
+      push("Stress: no income", pertIncomeAbs, {
+        kind: "stress",
+        label: pertFlash ?? "stress test",
+      });
+    }
+
+    // --- ledger: living costs ---
+    push("Rent", -p.rentMonthly, { kind: "baseline" });
+    push("Groceries", -p.groceriesMonthly, { kind: "baseline" });
+    push("Transport", -p.transportMonthly, { kind: "baseline" });
+    push("Utilities", -p.utilitiesMonthly, { kind: "baseline" });
+    push("Everything else", -p.otherMonthly, { kind: "baseline" });
+    for (const extra of householdExtras) {
+      push(extra.label, -extra.amount, { kind: "baseline" });
+    }
+    for (const o of ongoingSpends) {
+      push("Living cost adjustment", -o.amount, {
+        kind: "decision",
+        decisionId: o.decisionId,
+        decisionMonth: o.decisionMonth,
+        choiceLabel: o.choiceLabel,
+      });
+    }
+    if (pertBurnMult > 1) {
+      const surcharge = Math.round(burnBase * (pertBurnMult - 1));
+      if (surcharge > 0)
+        push("Stress: higher living costs", -surcharge, {
+          kind: "stress",
+          label: pertFlash ?? "stress test",
+        });
+    }
+
+    for (const inst of installments) {
+      if (inst.remaining > 0) {
+        push("Payment plan", -inst.monthly, {
+          kind: "decision",
+          decisionId: inst.decisionId,
+          decisionMonth: inst.decisionMonth,
+          choiceLabel: inst.choiceLabel,
+        });
+      }
+    }
+
     const micEv = microByMonth.get(m);
     if (micEv && !flash && !pertFlash) {
       balance += micEv.amount;
+      push(micEv.label, micEv.amount, {
+        kind: "micro",
+        label: micEv.detail,
+      });
       flash = micEv.detail;
     }
+
+    const preGrowthBalance = balance;
+    const interest = Math.round(preGrowthBalance * monthlyRate);
+    if (interest !== 0) {
+      push("Interest on savings", interest, { kind: "baseline" });
+    }
+
     const leftover = income - burn - due;
     const saved = Math.max(0, leftover) * savingsRate;
-    balance = balance * (1 + monthlyRate) + saved;
+    const notSaved = Math.max(0, leftover - saved);
+    if (notSaved > 0) {
+      push("Spent (not saved)", -notSaved, { kind: "baseline" });
+    }
+    if (saved > 0) {
+      push("Saved this month", saved, { kind: "baseline" });
+    }
+
+    balance = preGrowthBalance * (1 + monthlyRate) + saved;
     if (balance < 0) everNegative = true;
     for (const i of installments) if (i.remaining > 0) i.remaining -= 1;
 
@@ -201,7 +382,9 @@ export function simulate(
       (() => {
         switch (pert.kind) {
           case "layoff":
-            return m >= pert.atMonth && m < pert.atMonth + pert.monthsUnemployed;
+            return (
+              m >= pert.atMonth && m < pert.atMonth + pert.monthsUnemployed
+            );
           case "rent_spike":
             return m >= pert.atMonth;
           case "recession":
@@ -217,9 +400,10 @@ export function simulate(
         }
       })();
 
+    const roundedBalance = Math.round(balance);
     months.push({
       month: m,
-      balance: Math.round(balance),
+      balance: roundedBalance,
       savedThisMonth: Math.round(saved),
       income: Math.round(income),
       essentials: Math.round(totalBurn),
@@ -230,6 +414,9 @@ export function simulate(
       flash: pertFlash ?? flash,
       stressHit: !!pertFlash,
       underStress,
+      ledger,
+      priorBalance,
+      balanceDelta: roundedBalance - priorBalance,
     });
     if (pending && !stressProbe) break;
   }
