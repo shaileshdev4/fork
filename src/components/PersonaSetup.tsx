@@ -9,6 +9,7 @@ import {
   VALUE_LABEL,
   VALUE_BLURB,
 } from "@/lib/persona";
+import { Logo } from "@/components/Logo";
 
 /**
  * After the sentence, two light taps that make the whole story theirs:
@@ -66,11 +67,7 @@ export default function PersonaSetup({
 
   return (
     <div className="max-w-2xl mx-auto px-5 py-14 md:py-20">
-      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.25em] text-muted mb-6">
-        <span className="h-px w-8 bg-pathA" />
-        Fork
-        <span className="h-px w-8 bg-pathB" />
-      </div>
+      <Logo variant="eyebrow" className="mb-6" />
 
       {step === 0 ? (
         <motion.div

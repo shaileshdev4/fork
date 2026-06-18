@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
+import { Logo } from "@/components/Logo";
 
 /**
  * "Say it" - the single-sentence entry. Voice (Web Speech API, native, free) or
@@ -105,11 +106,7 @@ export default function Onboarding({
 
   return (
     <div className="max-w-2xl mx-auto px-5 py-16 md:py-24">
-      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.25em] text-muted mb-6">
-        <span className="h-px w-8 bg-pathA" />
-        Fork
-        <span className="h-px w-8 bg-pathB" />
-      </div>
+      <Logo variant="eyebrow" className="mb-6" />
 
       {resumable && (
         <div className="mb-6 rounded-xl border border-line bg-paper p-4 flex items-center justify-between gap-3">
