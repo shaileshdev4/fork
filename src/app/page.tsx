@@ -77,6 +77,9 @@ export default function Home() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const preStress = useRef<StressSnapshot | null>(null);
   const lastStressHitMonth = useRef(0);
+  // Holds latest sim state for the setInterval closure (avoids stale captures).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const simStateRef = useRef<Record<string, any>>({});
 
   useEffect(() => {
     const r = decodeRun(window.location.search);

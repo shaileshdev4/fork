@@ -5,7 +5,8 @@
  * localStorage is unavailable — they will never throw.
  */
 
-const VID_KEY = "_fork_vid";
+// Must match the key used by PendoInitializer.tsx so both modules share the same UUID.
+const VID_KEY = "fork-pendo-visitor";
 
 /** Get or create a persistent anonymous visitor ID. */
 export function getOrCreateVisitorId(): string {
