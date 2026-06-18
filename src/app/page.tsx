@@ -42,8 +42,6 @@ import {
   setAmbientEnabled,
   flashEventKind,
 } from "@/lib/sound";
-import { trackPendo } from "@/lib/pendo";
-
 type Phase = "onboarding" | "persona" | "sim";
 
 type StressSnapshot = {
@@ -186,11 +184,6 @@ export default function Home() {
       if (lane === "A") setChoicesA((c) => ({ ...c, [decisionId]: optionId }));
       else setChoicesB((c) => ({ ...c, [decisionId]: optionId }));
       if (sound) sfx.confirm();
-      trackPendo("fork_decision_made", {
-        lane,
-        decision_id: decisionId,
-        option_id: optionId,
-      });
       setActiveDecision(null);
     },
     [activeDecision, sound],
@@ -279,12 +272,6 @@ export default function Home() {
         aiParsed: res.ok,
       });
       setPhase("persona");
-      trackPendo("onboarding_parsed", {
-        city_a: pa.city,
-        city_b: pb.city,
-        country_a: pa.country,
-        country_b: pb.country,
-      });
     } catch {
       setPhase("persona");
     } finally {
@@ -304,11 +291,6 @@ export default function Home() {
     preStress.current = null;
     setActiveDecision(null);
     setPhase("sim");
-    trackPendo("persona_selected", {
-      stage: pp.stage,
-      kids: pp.kids,
-      top_value: pp.values[0],
-    });
   }, []);
 
   // AI narration of the synthesis (speaks to their values)
@@ -377,10 +359,6 @@ export default function Home() {
       setPlaying(false);
       lastFlashMonth.current = 0;
       lastStressHitMonth.current = 0;
-      trackPendo("stress_test_applied", {
-        kind: p.kind,
-        at_month: "atMonth" in p ? p.atMonth : null,
-      });
     },
     [choicesA, choicesB, month],
   );
@@ -505,7 +483,6 @@ export default function Home() {
       recommendation: synthesis.recommendation,
     });
     setCopied(true);
-    trackPendo("share_link_copied", { city_a: a.city, city_b: b.city });
     setTimeout(() => setCopied(false), 1800);
   }, [a, b, horizon, synthesis.recommendation]);
 
