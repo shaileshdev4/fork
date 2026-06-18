@@ -10,6 +10,7 @@ import { householdExtraMonthly } from "./persona";
 import { getCountry } from "./countries";
 import { deckFor, type Decision, type DecisionEffect } from "./decisions";
 import type { Perturbation } from "./stress";
+import { varietyEvents, type MicroEvent } from "./variety";
 
 export type Mood = "relaxed" | "stressed" | "celebrating";
 
@@ -24,6 +25,10 @@ export type MonthState = {
   mood: Mood;
   pendingDecision?: Decision;
   flash?: string;
+  /** True the month the stress shock first lands (banner + sound). */
+  stressHit?: boolean;
+  /** True while stress is still affecting this month's math. */
+  underStress?: boolean;
 };
 
 export type SimulatedLife = {
@@ -36,6 +41,9 @@ export type SimulatedLife = {
 
 export type Choices = Record<string, string>;
 
+/** play = stop at forks for the user; probe = fill defaults for stress synthesis */
+export type SimMode = "play" | "probe";
+
 const APY = 0.04;
 type ActiveInstallment = { monthly: number; remaining: number };
 
@@ -45,6 +53,7 @@ export function simulate(
   choices: Choices,
   horizon: number,
   perturbation?: Perturbation,
+  mode: SimMode = "play",
 ): SimulatedLife {
   const country = getCountry(p.country);
   const tax = country.compute(p.salary, p.region);
@@ -58,6 +67,11 @@ export function simulate(
   const monthlyRate = APY / 12;
   const deck = deckFor(persona.stage);
   const pert = perturbation ?? { kind: "none" as const };
+  const stressProbe = mode === "probe";
+  const forkMonths = deck.map((d) => d.month);
+  const micro = varietyEvents(p, persona, forkMonths, horizon);
+  const microByMonth = new Map<number, MicroEvent>();
+  for (const e of micro) microByMonth.set(e.month, e);
 
   const months: MonthState[] = [];
   let balance = 0,
@@ -76,26 +90,33 @@ export function simulate(
     const decision = decByMonth.get(m);
     if (decision) {
       const chosenId = choices[decision.id];
-      if (chosenId) {
-        const opt = decision.options(p, persona).find((o) => o.id === chosenId);
-        if (opt) {
-          const e: DecisionEffect = opt.effect;
-          if (e.oneTime) balance += e.oneTime;
-          if (e.monthlySpendDelta) spendDelta += e.monthlySpendDelta;
-          if (e.monthlyIncomeDelta) incomeDelta += e.monthlyIncomeDelta;
-          if (e.savingsRateDelta)
-            savingsRate = Math.max(
-              0,
-              Math.min(1, savingsRate + e.savingsRateDelta),
-            );
-          if (e.installment)
-            installments.push({
-              monthly: e.installment.monthly,
-              remaining: e.installment.months,
-            });
-          flash = opt.consequence;
-        }
-      } else pending = decision;
+      let opt = chosenId
+        ? decision.options(p, persona).find((o) => o.id === chosenId)
+        : undefined;
+      // Stress-test runs the full horizon: unresolved forks use the first option
+      // as a neutral projection so shocks at month 12+ still apply.
+      if (!opt && stressProbe) {
+        opt = decision.options(p, persona)[0];
+      }
+      if (opt) {
+        const e: DecisionEffect = opt.effect;
+        if (e.oneTime) balance += e.oneTime;
+        if (e.monthlySpendDelta) spendDelta += e.monthlySpendDelta;
+        if (e.monthlyIncomeDelta) incomeDelta += e.monthlyIncomeDelta;
+        if (e.savingsRateDelta)
+          savingsRate = Math.max(
+            0,
+            Math.min(1, savingsRate + e.savingsRateDelta),
+          );
+        if (e.installment)
+          installments.push({
+            monthly: e.installment.monthly,
+            remaining: e.installment.months,
+          });
+        flash = opt.consequence;
+      } else {
+        pending = decision;
+      }
     }
 
     const burnBase = baseBurn + spendDelta;
@@ -127,8 +148,11 @@ export function simulate(
         }
         break;
       case "income_drop":
-        if (m >= pert.atMonth && (pert.permanent || m < pert.atMonth + 12))
+        if (m >= pert.atMonth && (pert.permanent || m < pert.atMonth + 12)) {
           pertIncomeMult = 1 - pert.pct;
+          if (m === pert.atMonth)
+            pertFlash = `Income down ${Math.round(pert.pct * 100)}%.`;
+        }
         break;
       case "big_expense":
         if (m === pert.atMonth) {
@@ -147,6 +171,11 @@ export function simulate(
       0,
       (tax.netMonthly + incomeDelta) * pertIncomeMult + pertIncomeAbs,
     );
+    const micEv = microByMonth.get(m);
+    if (micEv && !flash && !pertFlash) {
+      balance += micEv.amount;
+      flash = micEv.detail;
+    }
     const leftover = income - burn - due;
     const saved = Math.max(0, leftover) * savingsRate;
     balance = balance * (1 + monthlyRate) + saved;
@@ -167,6 +196,27 @@ export function simulate(
     )
       mood = "stressed";
 
+    const underStress =
+      pert.kind !== "none" &&
+      (() => {
+        switch (pert.kind) {
+          case "layoff":
+            return m >= pert.atMonth && m < pert.atMonth + pert.monthsUnemployed;
+          case "rent_spike":
+            return m >= pert.atMonth;
+          case "recession":
+            return m >= pert.atMonth && m < pert.atMonth + pert.months;
+          case "income_drop":
+            return (
+              m >= pert.atMonth && (pert.permanent || m < pert.atMonth + 12)
+            );
+          case "big_expense":
+            return m === pert.atMonth;
+          default:
+            return false;
+        }
+      })();
+
     months.push({
       month: m,
       balance: Math.round(balance),
@@ -177,9 +227,11 @@ export function simulate(
       runwayMonths: Math.max(0, runway),
       mood,
       pendingDecision: pending,
-      flash: flash ?? pertFlash,
+      flash: pertFlash ?? flash,
+      stressHit: !!pertFlash,
+      underStress,
     });
-    if (pending) break;
+    if (pending && !stressProbe) break;
   }
 
   return {
