@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
 import { Logo } from "@/components/Logo";
+import { track } from "@/lib/analytics";
 
 /**
  * "Say it" - the single-sentence entry. Voice (Web Speech API, native, free) or

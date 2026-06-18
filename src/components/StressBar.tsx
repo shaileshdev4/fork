@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import type { Perturbation } from "@/lib/stress";
 import { STRESS_PRESETS, describePerturbation, stressAtMonth } from "@/lib/stress";
+import { track } from "@/lib/analytics";
 
 /**
  * Stress-test (#7) + natural-language what-if (#6). Real decisions are made on

@@ -10,6 +10,7 @@ import {
   VALUE_BLURB,
 } from "@/lib/persona";
 import { Logo } from "@/components/Logo";
+import { identifyVisitor, track } from "@/lib/analytics";
 
 /**
  * After the sentence, two light taps that make the whole story theirs:
