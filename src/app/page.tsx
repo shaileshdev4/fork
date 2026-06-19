@@ -166,6 +166,11 @@ export default function Home() {
       horizon,
     ],
   );
+  const ledgerMonthCount = useMemo(
+    () => Math.min(lifeA.months.length, lifeB.months.length),
+    [lifeA.months.length, lifeB.months.length],
+  );
+  const canBrowseLedger = phase === "sim" && ledgerMonthCount >= 1;
 
   const openLedgerArchive = useCallback(() => {
     setShowLedgerArchive(true);
@@ -810,18 +815,9 @@ export default function Home() {
               )}
             </p>
           ) : cycleComplete ? (
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-1 w-full">
-              <p className="text-xs text-ink/80 flex-1">
-                Full timeline complete — audit every month, line by line.
-              </p>
-              <button
-                type="button"
-                onClick={openLedgerArchive}
-                className="text-xs shrink-0 rounded-full border border-ink px-3 py-1.5 text-ink hover:bg-ink hover:text-paper transition-colors"
-              >
-                Open life ledger
-              </button>
-            </div>
+            <p className="text-xs text-ink/80 px-1">
+              Full timeline complete — open the life ledger to audit every month.
+            </p>
           ) : (
             <p className="text-xs text-muted px-1">
               {playing
@@ -849,8 +845,9 @@ export default function Home() {
           currencyB={b.currency}
           themeA={THEME_A}
           themeB={THEME_B}
-          showBrowseAll={cycleComplete}
+          showBrowseAll={canBrowseLedger}
           onBrowseAll={openLedgerArchive}
+          browseAllLabel={`All months (1–${ledgerMonthCount})`}
         />
       </div>
 
@@ -902,7 +899,7 @@ export default function Home() {
         >
           {copied ? "Link copied" : "Copy link"}
         </button>
-        {cycleComplete && (
+        {canBrowseLedger && (
           <button
             type="button"
             onClick={openLedgerArchive}

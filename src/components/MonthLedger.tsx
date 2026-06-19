@@ -26,6 +26,7 @@ export default function MonthLedgerPanel({
   themeB,
   onBrowseAll,
   showBrowseAll,
+  browseAllLabel = "All months so far",
 }: {
   open: boolean;
   onToggle: () => void;
@@ -44,6 +45,7 @@ export default function MonthLedgerPanel({
   themeB: LaneTheme;
   onBrowseAll?: () => void;
   showBrowseAll?: boolean;
+  browseAllLabel?: string;
 }) {
   const active =
     lane === "A"
@@ -79,7 +81,7 @@ export default function MonthLedgerPanel({
             onClick={onBrowseAll}
             className="text-xs text-ink underline underline-offset-4 shrink-0 hover:opacity-80"
           >
-            All months
+            {browseAllLabel}
           </button>
         )}
       </div>

@@ -142,7 +142,7 @@ export default function StatementArchiveModal({
                 Life ledger
               </h2>
               <p className="text-xs text-muted mt-1">
-                Every month, line by line — both futures you lived.
+                Every month so far, line by line — both futures you&apos;ve lived.
               </p>
             </div>
             <button
