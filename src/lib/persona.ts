@@ -83,13 +83,10 @@ export function householdCostMultiplier(p: Persona): number {
 /** Extra dedicated monthly lines a household carries (childcare, etc.). */
 export function householdExtraMonthly(
   p: Persona,
-  currency: CurrencyCode,
+  _currency: CurrencyCode,
 ): { label: string; amount: number }[] {
-  const scale = currency === "CAD" ? 1.35 : currency === "INR" ? 85 : 1;
-  const out: { label: string; amount: number }[] = [];
-  if (p.stage === "family" && p.kids > 0) {
-    // Childcare is THE dominant family cost and the thing generic tools miss.
-    out.push({ label: "Childcare", amount: Math.round(p.kids * 1100 * scale) });
-  }
-  return out;
+  // Childcare is modeled by the family-childcare decision fork (month 5), not here —
+  // adding it here double-counts daycare/nanny on top of that choice.
+  void p;
+  return [];
 }

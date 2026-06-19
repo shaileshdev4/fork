@@ -18,7 +18,7 @@ export default function StatementArchiveModal({
   open,
   onClose,
   initialMonth,
-  horizon,
+  maxViewMonth,
   lane,
   onLaneChange,
   lifeA,
@@ -35,7 +35,8 @@ export default function StatementArchiveModal({
   open: boolean;
   onClose: () => void;
   initialMonth: number;
-  horizon: number;
+  /** Cap at playback month — only months you've lived through. */
+  maxViewMonth: number;
   lane: Lane;
   onLaneChange: (l: Lane) => void;
   lifeA: SimulatedLife;
@@ -49,11 +50,7 @@ export default function StatementArchiveModal({
   themeA: LaneTheme;
   themeB: LaneTheme;
 }) {
-  const maxMonth = Math.min(
-    horizon,
-    lifeA.months.length,
-    lifeB.months.length,
-  );
+  const maxMonth = Math.max(1, maxViewMonth);
   const [viewMonth, setViewMonth] = useState(initialMonth);
 
   useEffect(() => {

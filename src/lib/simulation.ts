@@ -274,7 +274,7 @@ export function simulate(
     // --- ledger: income ---
     push("Take-home income", tax.netMonthly, { kind: "baseline" });
     for (const o of ongoingIncomes) {
-      push("Income adjustment", o.amount, {
+      push(o.choiceLabel, o.amount, {
         kind: "decision",
         decisionId: o.decisionId,
         decisionMonth: o.decisionMonth,
@@ -306,7 +306,7 @@ export function simulate(
       push(extra.label, -extra.amount, { kind: "baseline" });
     }
     for (const o of ongoingSpends) {
-      push("Living cost adjustment", -o.amount, {
+      push(o.choiceLabel, -o.amount, {
         kind: "decision",
         decisionId: o.decisionId,
         decisionMonth: o.decisionMonth,
@@ -324,7 +324,7 @@ export function simulate(
 
     for (const inst of installments) {
       if (inst.remaining > 0) {
-        push("Payment plan", -inst.monthly, {
+        push(inst.choiceLabel, -inst.monthly, {
           kind: "decision",
           decisionId: inst.decisionId,
           decisionMonth: inst.decisionMonth,

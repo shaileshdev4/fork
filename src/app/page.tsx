@@ -167,8 +167,9 @@ export default function Home() {
     ],
   );
   const ledgerMonthCount = useMemo(
-    () => Math.min(lifeA.months.length, lifeB.months.length),
-    [lifeA.months.length, lifeB.months.length],
+    () =>
+      Math.min(month, lifeA.months.length, lifeB.months.length),
+    [month, lifeA.months.length, lifeB.months.length],
   );
   const canBrowseLedger = phase === "sim" && ledgerMonthCount >= 1;
 
@@ -555,11 +556,7 @@ export default function Home() {
 
   const stressMonth = stressAtMonth(stress);
   const stressFlashNow = stateA?.stressHit || stateB?.stressHit;
-  const maxSimMonth = Math.min(
-    horizon,
-    lifeA.months.length,
-    lifeB.months.length,
-  );
+  const maxSimMonth = ledgerMonthCount;
 
   const scrubToMonth = (m: number) => {
     setPlaying(false);
@@ -946,7 +943,7 @@ export default function Home() {
           open={showLedgerArchive}
           onClose={() => setShowLedgerArchive(false)}
           initialMonth={month}
-          horizon={horizon}
+          maxViewMonth={ledgerMonthCount}
           lane={ledgerLane}
           onLaneChange={setLedgerLane}
           lifeA={lifeA}

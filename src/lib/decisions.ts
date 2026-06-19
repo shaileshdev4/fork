@@ -56,6 +56,28 @@ const money = (n: number, cur: string) =>
   });
 const costScale = (cur: string) =>
   cur === "CAD" ? 1.35 : cur === "INR" ? 85 : 1;
+
+/** Childcare fork amounts — INR uses metro-realistic figures, not USD×85. */
+function familyChildcareCosts(
+  currency: string,
+  kids: number,
+  partnerEarns: boolean,
+) {
+  const k = Math.max(1, kids);
+  if (currency === "INR") {
+    return {
+      daycare: k * 16000,
+      nanny: 28000 + (k - 1) * 6000,
+      stayHome: partnerEarns ? 42000 : 0,
+    };
+  }
+  const scale = costScale(currency);
+  return {
+    daycare: Math.round(k * 1100 * scale),
+    nanny: Math.round((1900 + (k - 1) * 300) * scale),
+    stayHome: partnerEarns ? Math.round(2600 * scale) : 0,
+  };
+}
 const transitFriendly = (city: string) =>
   [
     "New York",
@@ -443,12 +465,11 @@ const FAMILY: Decision[] = [
     setup: (p, per) =>
       `With ${per.kids > 1 ? `${per.kids} kids` : "a child"} and work, childcare isn't optional - it's one of your biggest costs.`,
     options: (p, per) => {
-      const k = Math.max(1, per.kids);
-      const daycare = Math.round(k * 1100 * costScale(p.currency));
-      const nanny = Math.round((1900 + (k - 1) * 300) * costScale(p.currency));
-      const stayHome = per.partnerEarns
-        ? Math.round(2600 * costScale(p.currency))
-        : 0;
+      const { daycare, nanny, stayHome } = familyChildcareCosts(
+        p.currency,
+        per.kids,
+        per.partnerEarns,
+      );
       const opts: DecisionOption[] = [
         {
           id: "daycare",
