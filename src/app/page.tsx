@@ -611,6 +611,7 @@ export default function Home() {
             )}
           </button>
           <button
+            id="fork-new-decision"
             onClick={() => {
               setPhase("onboarding");
               setNarration("");
@@ -693,6 +694,7 @@ export default function Home() {
       <div className="mt-5 rounded-xl border border-line bg-paper p-4">
         <div className="flex items-center gap-3">
           <button
+            id="fork-play-pause"
             onClick={() => {
               const atEnd = month >= horizon;
               if (atEnd) setMonth(1);
@@ -776,6 +778,7 @@ export default function Home() {
             </div>
           </div>
           <button
+            id="fork-restart"
             onClick={restartRun}
             className="text-sm text-muted hover:text-ink underline underline-offset-4 shrink-0"
             title={
@@ -881,6 +884,7 @@ export default function Home() {
 
       <section className="mt-6 flex flex-wrap items-center gap-4">
         <button
+          id="fork-share-decision"
           onClick={() => {
             setShowCard(true);
             track("share_card_viewed", {
@@ -894,6 +898,7 @@ export default function Home() {
           Share decision
         </button>
         <button
+          id="fork-copy-link"
           onClick={share}
           className="border border-line px-5 py-2.5 rounded-lg text-sm hover:border-ink"
         >

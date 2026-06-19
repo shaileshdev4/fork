@@ -27,6 +27,7 @@ export default function TrustPanel({
   return (
     <div className="rounded-xl border border-line bg-paper/60 p-4">
       <button
+        id="fork-data-sources"
         onClick={() => setOpen((o) => !o)}
         className="flex items-center justify-between w-full text-left"
       >
