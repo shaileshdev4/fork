@@ -156,6 +156,7 @@ export default function PersonaSetup({
           )}
 
           <button
+            id="fork-persona-next"
             onClick={() => setStep(1)}
             className="mt-7 rounded-full bg-ink text-paper px-6 py-2.5 text-sm hover:opacity-90"
           >
@@ -217,6 +218,7 @@ export default function PersonaSetup({
               ← Back
             </button>
             <button
+              id="fork-persona-done"
               onClick={finish}
               disabled={ranked.length < 1}
               className="rounded-full bg-ink text-paper px-6 py-2.5 text-sm hover:opacity-90 disabled:opacity-40"

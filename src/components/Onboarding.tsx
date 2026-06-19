@@ -163,6 +163,7 @@ export default function Onboarding({
         <div className="flex items-center gap-3 mt-4">
           {voiceSupported && (
             <button
+              id="fork-voice-input"
               onClick={toggleVoice}
               className="relative flex items-center gap-2 rounded-full border-2 px-4 py-2.5 text-sm transition-colors"
               style={{
@@ -192,6 +193,7 @@ export default function Onboarding({
           )}
 
           <button
+            id="fork-see-futures"
             onClick={submit}
             disabled={loading || text.trim().length < 3}
             className="rounded-full bg-ink text-paper px-6 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-40"
@@ -201,6 +203,7 @@ export default function Onboarding({
         </div>
 
         <button
+          id="fork-try-sample"
           onClick={() => {
             track("sample_decision_selected", {});
             onSubmit("Compare an Austin job at $130k with a San Francisco job at $200k");

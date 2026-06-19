@@ -118,6 +118,7 @@ export default function StressBar({
               className="flex-1 bg-paper border border-line rounded-lg px-3 py-2 text-sm text-ink outline-none focus:border-ink placeholder:text-muted/60"
             />
             <button
+              id="fork-stress-whatif"
               onClick={submit}
               disabled={thinking || text.trim().length < 3}
               className="rounded-lg bg-ink text-paper px-4 py-2 text-sm hover:opacity-90 disabled:opacity-40 shrink-0"
